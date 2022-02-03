@@ -101,7 +101,7 @@ const checkForGlobalIncidents = (array) => {
 const getDataFromInflux = async () => {
     const url = "https://influxapi.egamings.com/query?q=";
     let query = '';
-    let queryData = {
+    const queryData = {
         nodeHost: ['site2-deac-loggingdb1-4', 'site2-deac-loggingdb2-4', 'site1-telia-loggingdb3-4'],
         nodeReqTimeField: ['mr_req_time_in_system', 'mr_req_time_in_system2', 'mr_req_time_in_system3']
     }
@@ -145,20 +145,20 @@ const getIncidentsFromArray = async () => {
     return incidents;
 }
 
-const main = async () => {
+export const main = async () => {
     let result;
     let dateInsertResult;
 
     const incidents = await getIncidentsFromArray()
     console.log(incidents.length)
+    dateInsertResult = await insertDate(dateTo);
     if(incidents.length !== 0){
         for (const incident of incidents) {
             result = await insertIncidentsIntoDB(incident);
         };
-        dateInsertResult = await insertDate(dateTo);
+        return result;
     } else {
-        console.log("No incidents to insert")
+        return ("No incidents to insert")
     }
 }
 
-await main()
