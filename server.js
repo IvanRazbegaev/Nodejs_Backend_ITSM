@@ -27,7 +27,7 @@ server.route('/tracker')
         dbConnection.deleteValue(req.query.id)
         res.send("Done")
     })
-
-console.log("Server is running and listening on port ", port)
-server.listen(`${port}`);
+server.listen(`${port}`, () => {
+    console.log("Server is running and listening on port ", port)
+});
 
