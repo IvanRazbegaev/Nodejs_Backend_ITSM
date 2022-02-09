@@ -5,7 +5,6 @@ const dbConnection = new DatabaseConnection('incidents');
 
 export const insertDate = async (date) => {
     const insertResult = await dbConnection.insertValuesIntoService(date);
-    console.log(insertResult)
 }
 
 //lastCheckTimestamp достает из базы последнюю запись с timestamp запуска данного скрипта

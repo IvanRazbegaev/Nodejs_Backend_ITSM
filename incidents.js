@@ -4,18 +4,32 @@ import axios from "axios";
 const higherIncidentThreshold = 0.15;
 const lowerIncidentThreshold = 0.03
 
-const dateTo = Date.now()
-const dateFrom = await lastCheckTimestamp();
+let dateTo = Date.now()
+let dateFrom = await lastCheckTimestamp();
 
+/*
+*@params number
+*@returns string
+ */
 const convertToJsonDate = (timestamp) => {
     return new Date(timestamp).toJSON()
 }
+
+/*
+*@params Date
+*@returns number
+ */
 
 const convertToTimestamp = (date) => {
     if (isNaN(Date.parse(date))) {
         return date
     } else return Date.parse(date)
 }
+
+/*
+*@params Date/number, Date/number, string, number
+*@returns Obj{number, number, string, number}
+ */
 
 const createIncidentObject = (incidentStart, incidentEnd, host, nettoTime) => {
     return {
@@ -25,6 +39,11 @@ const createIncidentObject = (incidentStart, incidentEnd, host, nettoTime) => {
         nettoTime: nettoTime,
     }
 }
+
+/*
+*@params Array
+*@returns Array
+ */
 
 const checkForLongIncidents = (array) => {
     for (let i = 0; i < array.length;) {
@@ -58,16 +77,21 @@ const checkForLongIncidents = (array) => {
     return array;
 }
 
+/*
+*@params Array
+*@returns Array
+ */
+
 const checkForGlobalIncidents = (array) => {
 
     const sortedArray = array.sort((firstItem, secondItem) => {
         if (firstItem.incidentStart < secondItem.incidentStart) {
             if (firstItem.incidentEnd < secondItem.incidentEnd) {
-                return 1
+                return -1
             } else return 0
         } else if (firstItem.incidentStart > secondItem.incidentStart) {
             if (firstItem.incidentEnd > secondItem.incidentEnd) {
-                return -1
+                return 1
             } else return 0
         }
     })
@@ -98,6 +122,10 @@ const checkForGlobalIncidents = (array) => {
     return sortedArray;
 }
 
+/*
+* @returns Array
+ */
+
 const getDataFromInflux = async () => {
     const url = "https://influxapi.egamings.com/query?q=";
     let query = '';
@@ -120,6 +148,10 @@ const getDataFromInflux = async () => {
 
 }
 
+/*
+* @returns Array
+ */
+
 const getIncidentsFromArray = async () => {
 
     const resultArray = await getDataFromInflux()
@@ -127,6 +159,9 @@ const getIncidentsFromArray = async () => {
 
 
     for (const result of resultArray) {
+        if (result.series.length === 0){
+            return incidents
+        }
         for (let i = 0; i < result.series[0].values.length; i++) {
             const incidentTime = result.series[0].values[i][0];
             const host = result.series[0].values[i][1];
@@ -144,13 +179,18 @@ const getIncidentsFromArray = async () => {
     incidents = checkForGlobalIncidents(incidents)
     return incidents;
 }
+/*
+* @returns string
+ */
 
 export const main = async () => {
     let result;
     let dateInsertResult;
 
+    dateTo = Date.now()
+    dateFrom = await lastCheckTimestamp();
+
     const incidents = await getIncidentsFromArray()
-    console.log(incidents.length)
     dateInsertResult = await insertDate(dateTo);
     if(incidents.length !== 0){
         for (const incident of incidents) {
