@@ -46,27 +46,31 @@ const createIncidentObject = (incidentStart, incidentEnd, host, nettoTime) => {
  */
 
 const checkForLongIncidents = (array) => {
+
+    const checkItemTimeFormat = (item) => {
+        if (item.incidentTime !== undefined) {
+            return createIncidentObject(item.incidentTime, item.incidentTime, item.host, item.nettoTime)
+        } else {
+            return createIncidentObject(item.incidentStart, item.incidentEnd, item.host, item.nettoTime)
+        }
+    }
+
     for (let i = 0; i < array.length;) {
 
         if (array[i + 1] === undefined) {
-            array[i] = createIncidentObject(array[i].incidentTime, array[i].incidentTime, array[i].host, array[i].nettoTime)
-            break
+            array[i] = checkItemTimeFormat(array[i]);
+            i++;
+            break;
         } else {
             if (array[i].host === array[i + 1].host) {
                 const timeDiff = convertToTimestamp(array[i].incidentTime) - convertToTimestamp(array[i + 1].incidentTime);
-                if (timeDiff <= 1 * 60 * 1000 && timeDiff >= -1 * 60 * 1000) {
+                if (timeDiff <= 2 * 60 * 1000 && timeDiff >= -2 * 60 * 1000) {
                     let maxNetto = Math.max(array[i].nettoTime, array[i + 1].nettoTime);
                     array[i] = createIncidentObject(array[i].incidentTime, array[i + 1].incidentTime, array[i].host, maxNetto);
                     array.splice(i + 1, 1);
                 } else {
-                    if (array[i].incidentTime !== undefined) {
-                        array[i] = createIncidentObject(array[i].incidentTime, array[i].incidentTime, array[i].host, array[i].nettoTime)
-                        i++;
-                    } else {
-                        array[i] = createIncidentObject(array[i].incidentStart, array[i].incidentEnd, array[i].host, array[i].nettoTime)
-                        i++;
-                    }
-
+                    array[i] = checkItemTimeFormat(array[i]);
+                    i++;
                 }
             } else {
                 array[i] = createIncidentObject(array[i].incidentTime, array[i].incidentTime, array[i].host, array[i].nettoTime)
@@ -154,7 +158,7 @@ const getDataFromInflux = async () => {
 
 const getIncidentsFromArray = async () => {
 
-    const resultArray = await getDataFromInflux()
+    const resultArray = await getDataFromInflux();
     let incidents = [];
 
 
@@ -179,6 +183,7 @@ const getIncidentsFromArray = async () => {
     incidents = checkForGlobalIncidents(incidents)
     return incidents;
 }
+
 /*
 * @returns string
  */
@@ -195,7 +200,7 @@ export const main = async () => {
     if(incidents.length !== 0){
         for (const incident of incidents) {
             result = await insertIncidentsIntoDB(incident);
-        };
+        }
         return result;
     } else {
         return ("No incidents to insert")

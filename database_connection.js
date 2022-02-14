@@ -48,6 +48,37 @@ export class DatabaseConnection {
         })
     }
 
+    insertValuesIntoHa( dwntStart, dwntEnd, dwntLength, host, highLimit ) {
+        const sql ='INSERT INTO ha VALUES (NULL,?,?,?,?,?, NULL, NULL)'
+        const connection = this.setupDB(this.db);
+
+        return new Promise ((resolve, reject) => {
+            connection.query(sql, [ dwntStart, dwntEnd, dwntLength, host, highLimit ], (err, result) => {
+                if(err){
+                    return reject(err)
+                }
+                connection.end();
+                console.log("Inserted successfully")
+                return resolve(result)
+            })
+        })
+    }
+
+    checkValuesInHa ( dateFrom, dateTo, highLimit ){
+        const sql ='SELECT id from ha WHERE downtimeStart >= ? AND downtimeEnd <= ? AND highLimit = ?';
+        const connection = this.setupDB(this.db);
+
+        return new Promise ((resolve, reject) => {
+            connection.query(sql, [ dateFrom, dateTo, highLimit ], (err, result) => {
+                if(err){
+                    return reject(err)
+                }
+                connection.end();
+                return resolve(result)
+            })
+        })
+    }
+
     deleteValue(id) {
         const sql = `DELETE FROM incidents WHERE id=?`;
         const connection = this.setupDB(this.db);
