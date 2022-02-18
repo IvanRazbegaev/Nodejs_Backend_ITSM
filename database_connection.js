@@ -65,7 +65,7 @@ export class DatabaseConnection {
     }
 
     checkValuesInHa ( dateFrom, dateTo, highLimit ){
-        const sql ='SELECT id from ha WHERE downtimeStart >= ? AND downtimeEnd <= ? AND highLimit = ?';
+        const sql ='SELECT * from ha WHERE downtimeStart >= ? AND downtimeEnd <= ? AND highLimit = ?';
         const connection = this.setupDB(this.db);
 
         return new Promise ((resolve, reject) => {
@@ -107,8 +107,25 @@ export class DatabaseConnection {
         connection.end();
     }
 
-    selectAllValuesInIncidents() {
-        const sql = 'SELECT * FROM incidents'
+    selectAllValuesInIncidents(start, end) {
+        const sql = 'SELECT * FROM incidents WHERE start_date >= ? AND end_date <= ? '
+        const connection = this.setupDB(this.db);
+        const dateFrom = new Date(start).toJSON().slice(0, 19).replace('T', ' ');
+        const dateTo = new Date(end).toJSON().slice(0, 19).replace('T', ' ');
+
+        return new Promise((resolve, reject) => {
+            connection.query(sql,[dateFrom, dateTo], (err, result) => {
+                if(err){
+                    return reject(err)
+                }
+                connection.end();
+                return resolve(result)
+            })
+        })
+    }
+
+    getAllValuesInHa() {
+        const sql = 'SELECT * FROM ha';
         const connection = this.setupDB(this.db);
 
         return new Promise((resolve, reject) => {

@@ -188,12 +188,9 @@ const getIncidentsFromArray = async () => {
 * @returns string
  */
 
-export const main = async () => {
+export const main = async (dateFrom, dateTo) => {
     let result;
     let dateInsertResult;
-
-    dateTo = Date.now()
-    dateFrom = await lastCheckTimestamp();
 
     const incidents = await getIncidentsFromArray()
     dateInsertResult = await insertDate(dateTo);
