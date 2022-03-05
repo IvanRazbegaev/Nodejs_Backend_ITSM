@@ -21,7 +21,7 @@ export const insertDate = async (date) => {
 //lastCheckTimestamp достает из базы последнюю запись с timestamp запуска данного скрипта
 
 export const lastCheckTimestamp = async () => {
-    const lastCheckTimestamp = await incidentsConnection.selectLastValueInService()
+    const lastCheckTimestamp = await incidentsConnection.selectLastValueInService();
     return Object.assign({}, lastCheckTimestamp)[0].lastStarted;
 }
 
@@ -38,19 +38,36 @@ export const convertTimestampToDate = (timestamp) => {
     return new Date(timestamp).toJSON().slice(0, 19).replace('T', ' ');
 }
 
-export const insertDowntimesIntoDB = async (obj) => {
+export const insertDowntimesIntoDB = async (obj, incidentId) => {
     const dwntStart = convertTimestampToDate(obj.dwntStart * 1000)
     const dwntEnd = convertTimestampToDate(obj.dwntEnd * 1000)
 
-    const insertResult = await haConnection.insertValuesIntoHa(dwntStart, dwntEnd, obj.dwntLength, obj.node, obj.highLimit)
+    const res = await haConnection.insertValuesIntoHa(dwntStart, dwntEnd, obj.dwntLength, obj.node, obj.highLimit, incidentId)
 }
+
+export const insertReqDropsIntoDB = async(obj) => {
+    const dwntStart = convertTimestampToDate(obj.reqDropStart * 1000)
+    const dwntEnd = convertTimestampToDate(obj.reqDropEnd * 1000)
+
+    const res = await haConnection.insertReqDropsIntoHa(dwntStart, dwntEnd, obj.reqDropLenght, obj.host)
+}
+
 
 export const checkHaMonth = async (month, year, highLimit) => {
 
-    const periodStart = convertTimestampToDate(getPeriodStartDate(month, year));
-    const periodEnd = convertTimestampToDate(getPeriodEndDate(month, year));
+    const periodStart = getPeriodStartDate(month, year);
+    const periodEnd = getPeriodEndDate(month, year);
 
     const checkResult = await haConnection.checkValuesInHa(periodStart, periodEnd, highLimit)
+
+    return checkResult;
+}
+
+export const checkReqDropInHa = async (obj) => {
+    const reqDropStart = convertTimestampToDate(obj.reqDropStart * 1000)
+    const reqDropEnd = convertTimestampToDate(obj.reqDropEnd * 1000)
+
+    const checkResult = await haConnection.checkValuesInHa(reqDropStart, reqDropEnd)
 
     return checkResult;
 }
@@ -58,4 +75,19 @@ export const checkHaMonth = async (month, year, highLimit) => {
 export const checkAllInHa = async() => {
     const allData = await haConnection.getAllValuesInHa();
     return allData;
+}
+
+export const selectIdInIncidents = async (dateFrom, dateTo) => {
+
+    const incidentIds = await incidentsConnection.selectAllValuesInIncidents('id', dateFrom, dateTo)
+    const result = await Object.assign({}, incidentIds)[0];
+    if (result === undefined){
+        return ''
+    }
+    return result.id;
+}
+
+export const deleteIdFromHa = async (id) => {
+    const result = await haConnection.deleteValueFromHa(id)
+    return result;
 }

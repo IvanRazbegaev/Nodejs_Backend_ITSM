@@ -1,6 +1,11 @@
 import moment from "moment/moment.js";
 import axios from "axios";
-import {checkHaMonth, getPeriodEndDate, getPeriodStartDate, insertDowntimesIntoDB} from "./helpers/helpers.js";
+import {
+    checkHaMonth,
+    getPeriodEndDate,
+    getPeriodStartDate, insertDowntimesIntoDB,
+    selectIdInIncidents
+} from "./helpers/helpers.js";
 
 let periodStart, periodEnd;
 
@@ -60,77 +65,106 @@ const createTempPromArray = async (periodStart, periodEnd, node) => {
 const createDowntimeObj = (obj, avgRespTimeBuffer) => {
 
     if (obj.timestamp) {
-        if (avgRespTimeBuffer !==undefined && avgRespTimeBuffer.length > 1) {
+        if (avgRespTimeBuffer !== undefined && avgRespTimeBuffer.length > 1) {
             return {
                 dwntStart: obj.timestamp,
                 dwntEnd: obj.timestamp,
                 node: obj.node,
                 highLimit: obj.highLimit,
-                respTime: avgRespTimeBuffer
+                avgRespTime: avgRespTimeBuffer
             }
         } else
-        return {
-            dwntStart: obj.timestamp,
-            dwntEnd: obj.timestamp,
-            node: obj.node,
-            highLimit: obj.highLimit,
-            respTime: obj.avgRespTime
-        }
+            return {
+                dwntStart: obj.timestamp,
+                dwntEnd: obj.timestamp,
+                node: obj.node,
+                highLimit: obj.highLimit,
+                avgRespTime: obj.avgRespTime
+            }
     } else {
-        if (avgRespTimeBuffer !==undefined && avgRespTimeBuffer.length > 1) {
+        if (avgRespTimeBuffer !== undefined && avgRespTimeBuffer.length > 1) {
             return {
                 dwntStart: obj.dwntStart,
                 dwntEnd: obj.dwntEnd,
                 node: obj.node,
                 highLimit: obj.highLimit,
-                respTime: avgRespTimeBuffer
+                avgRespTime: avgRespTimeBuffer
             }
         } else
             return {
-            dwntStart: obj.dwntStart,
-            dwntEnd: obj.dwntEnd,
-            node: obj.node,
-            highLimit: obj.highLimit,
-            respTime: obj.respTime
+                dwntStart: obj.dwntStart,
+                dwntEnd: obj.dwntEnd,
+                node: obj.node,
+                highLimit: obj.highLimit,
+                avgRespTime: obj.avgRespTime
 
-        }
+            }
     }
 }
 
 const longDowntimeFilter = (array) => {
+    if(array === undefined){
+        return []
+    }
     for (let i = 0; i < array.length;) {
         if (array[i + 1] === undefined) {
             array[i] = createDowntimeObj(array[i])
             i++;
             break;
         } else {
-            const avgRespTimeBuffer = [];
+            let avgRespTimeBuffer = [];
             let timeDiff = 0;
-            if (array[i].timestamp) {
+
+            if (array[i].timestamp !== undefined) {
                 timeDiff = array[i + 1].timestamp - array[i].timestamp
                 avgRespTimeBuffer.push(array[i].avgRespTime);
             } else {
-                timeDiff = array[i + 1].timestamp - array[i].dwntEnd
+                timeDiff = array[i + 1].timestamp - array[i].dwntEnd;
+                if (Array.isArray(array[i].avgRespTime)) {
+                    avgRespTimeBuffer = array[i].avgRespTime
+                } else {
+                    avgRespTimeBuffer.push(array[i].avgRespTime);
+                }
             }
-            if (timeDiff <= 1 * 60 * 1000) {
-                avgRespTimeBuffer.push(array[i].avgRespTime);
-                array[i] = createDowntimeObj(array[i], avgRespTimeBuffer)
+
+            if (timeDiff <= 1 * 60) {
+                avgRespTimeBuffer.push(array[i + 1].avgRespTime);
+                if (array[i].dwntStart !== undefined) {
+                    array[i] = {
+                        dwntStart: array[i].dwntStart,
+                        dwntEnd: array[i + 1].timestamp,
+                        node: array[i].node,
+                        highLimit: array[i].highLimit,
+                        avgRespTime: avgRespTimeBuffer
+                    }
+                } else {
+                    array[i] = {
+                        dwntStart: array[i].timestamp,
+                        dwntEnd: array[i + 1].timestamp,
+                        node: array[i].node,
+                        highLimit: array[i].highLimit,
+                        avgRespTime: avgRespTimeBuffer
+                    }
+                }
                 array.splice(i + 1, 1);
             } else {
-                array[i] = createDowntimeObj(array[i])
+                if (!Array.isArray(array[i].avgRespTime)) {
+                    array[i] = createDowntimeObj(array[i])
+                }
                 i++;
             }
         }
     }
+
     return array;
 }
 
-const calculateAvailability = (array) => {
+const realDowntimeCalculation = (array) => {
     const result = [];
     for (let i = 0; i < array.length; i++) {
-        if ( typeof array[i].respTime === "number" ) {
-            const deltaResp = array[i].respTime - array[i].highLimit;
-            const dwntLength = (deltaResp / array[i].respTime) * 2;
+        if (typeof array[i].avgRespTime === "number") {
+            const deltaResp = array[i].avgRespTime - array[i].highLimit;
+            const dwntLength = (deltaResp / array[i].avgRespTime) * 2;
             result.push({
                 dwntStart: array[i].dwntStart,
                 dwntEnd: array[i].dwntStart,
@@ -139,11 +173,11 @@ const calculateAvailability = (array) => {
                 node: array[i].node
             })
         } else {
-            const deltaStart = array[i].respTime[0] - array[i].highLimit;
-            const deltaEnd = array[i].respTime[array[i].respTime.length - 1] - array[i].highLimit;
-            const deltaRespTimeStart = deltaStart / array[i].respTime[0];
-            const deltaRespTimeEnd = deltaEnd / array[i].respTime[array[i].respTime.length - 1];
-            const dwntLength = deltaRespTimeStart + deltaRespTimeEnd + ((array[i].dwntEnd - array[i].dwntStart)/(1 * 60 * 1000))
+            const deltaStart = array[i].avgRespTime[0] - array[i].highLimit;
+            const deltaEnd = array[i].avgRespTime[array[i].avgRespTime.length - 1] - array[i].highLimit;
+            const deltaRespTimeStart = deltaStart / array[i].avgRespTime[0];
+            const deltaRespTimeEnd = deltaEnd / array[i].avgRespTime[array[i].avgRespTime.length - 1];
+            const dwntLength = deltaRespTimeStart + deltaRespTimeEnd + ((array[i].dwntEnd - array[i].dwntStart) / (1 * 60 * 1000))
 
             result.push({
                 dwntStart: array[i].dwntStart,
@@ -160,7 +194,6 @@ const calculateAvailability = (array) => {
 const getDowntimes = async (periodStart, periodEnd, highLimit) => {
 
     const influxAvgTimeDbs = [
-        'host!="api.fundist.org"',
         'host=~"apiprod.fundist.org"',
         'host="apiprod2.fundist.org"',
         'host="apiprod3.fundist.org"'
@@ -182,39 +215,52 @@ const getDowntimes = async (periodStart, periodEnd, highLimit) => {
             }
         })
             .map(item => {
-                for (let i = 0; i < item.length; i++) {
+                return item.map(timeFraction => {
                     return {
-                        timestamp: item[i].timestamp,
-                        avgRespTime: item[i].avgRespTime,
-                        node: item[i].node,
+                        timestamp: timeFraction.timestamp,
+                        avgRespTime: timeFraction.avgRespTime,
+                        node: timeFraction.node,
                         highLimit
-                    };
-                }
-            }).filter(item => {
-                if (checkForDowntime(item)) {
-                    return item
-                }
+                    }
+                })
+                    .filter(timeFraction => checkForDowntime(timeFraction))
             })
+            .filter(item => {
+                if (item.length !== 0) {
+                    return item;
+                }
+            })[0]
     }
 
-    const firstNodeDowntimes = longDowntimeFilter(await downtimeFilter(await createTempPromArray(periodStart, periodEnd, influxAvgTimeDbs[1])))
+    const firstNodeDowntimes = longDowntimeFilter(await downtimeFilter(await createTempPromArray(periodStart, periodEnd, influxAvgTimeDbs[0])))
 
-    const secondNodeDowntimes = longDowntimeFilter(await downtimeFilter(await createTempPromArray(periodStart, periodEnd, influxAvgTimeDbs[2])))
+    const secondNodeDowntimes = longDowntimeFilter(await downtimeFilter(await createTempPromArray(periodStart, periodEnd, influxAvgTimeDbs[1])))
 
-    const thirdNodeDowntimes = longDowntimeFilter(await downtimeFilter(await createTempPromArray(periodStart, periodEnd, influxAvgTimeDbs[3])))
+    const thirdNodeDowntimes = longDowntimeFilter(await downtimeFilter(await createTempPromArray(periodStart, periodEnd, influxAvgTimeDbs[2])))
 
-    const allNodesDowntimes = longDowntimeFilter(await downtimeFilter(await createTempPromArray(periodStart, periodEnd, influxAvgTimeDbs[0])))
+    const haCalculationFirstNode = realDowntimeCalculation(firstNodeDowntimes);
+    const haCalculationSecondNode = realDowntimeCalculation(secondNodeDowntimes);
+    const haCalculationThirdNode = realDowntimeCalculation(thirdNodeDowntimes);
 
-    const haCalculationFirstNode = calculateAvailability(firstNodeDowntimes);
-    const haCalculationSecondNode = calculateAvailability(secondNodeDowntimes);
-    const haCalculationThirdNode = calculateAvailability(thirdNodeDowntimes);
-    const haCalculationAllNodes = calculateAvailability(allNodesDowntimes);
+    return {haCalculationFirstNode, haCalculationSecondNode, haCalculationThirdNode}
+}
 
-    return {haCalculationFirstNode, haCalculationSecondNode, haCalculationThirdNode, haCalculationAllNodes}
+const incidentRefSearch = async (data) => {
+
+    const from = data.dwntStart * 1000;
+    const to = data.dwntEnd * 1000;
+
+    const incidentId = await selectIdInIncidents(from, to)
+
+    return incidentId;
 }
 
 
 export const haMain = async (month, year, highLimit) => {
+
+    if (month > 12) {
+        return new Error("Вообще-то в году 12 месяцев...")
+    }
 
     periodStart = getPeriodStartDate(month, year);
     periodEnd = getPeriodEndDate(month, year);
@@ -224,23 +270,18 @@ export const haMain = async (month, year, highLimit) => {
         return checkIfDataExists;
     }
 
-    if (month > 12) {
-        return new Error("Вообще-то в году 12 месяцев...")
-    }
-
     const downtimes = await getDowntimes(periodStart, periodEnd, highLimit);
-    console.log(downtimes)
+
     for (const data of downtimes.haCalculationFirstNode) {
-        await insertDowntimesIntoDB(data);
+        const incidentId = await incidentRefSearch(data);
+        await insertDowntimesIntoDB(data, incidentId);
     }
     for (const data of downtimes.haCalculationSecondNode) {
-        await insertDowntimesIntoDB(data);
+        const incidentId = await incidentRefSearch(data);
+        await insertDowntimesIntoDB(data, incidentId);
     }
     for (const data of downtimes.haCalculationThirdNode) {
-        await insertDowntimesIntoDB(data);
+        const incidentId = await incidentRefSearch(data);
+        await insertDowntimesIntoDB(data, incidentId);
     }
-    for (const data of downtimes.haCalculationAllNodes) {
-        await insertDowntimesIntoDB(data);
-    }
-    return downtimes;
 }

@@ -20,8 +20,11 @@ export class DatabaseConnection {
         const sql ='INSERT INTO incidents VALUES (NULL,?,?,?,?,?)'
         const connection = this.setupDB(this.db);
 
+        const from = incStart.slice(0, 19).replace('T', ' ');
+        const to = incEnd.slice(0, 19).replace('T', ' ');
+
         return new Promise ((resolve, reject) => {
-            connection.query(sql, [ incStart, incEnd, incLength, desc, comment ], (err, result) => {
+            connection.query(sql, [ from, to, incLength, desc, comment ], (err, result) => {
                 if(err){
                     return reject(err)
                 }
@@ -33,7 +36,7 @@ export class DatabaseConnection {
     }
 
     insertValuesIntoService( timestamp ){
-        const sql ='INSERT INTO service VALUE (?)'
+        const sql ='INSERT INTO service VALUE (?, NULL)'
         const connection = this.setupDB(this.db);
 
         return new Promise((resolve, reject) => {
@@ -48,12 +51,28 @@ export class DatabaseConnection {
         })
     }
 
-    insertValuesIntoHa( dwntStart, dwntEnd, dwntLength, host, highLimit ) {
-        const sql ='INSERT INTO ha VALUES (NULL,?,?,?,?,?, NULL, NULL)'
+    insertValuesIntoHa( dwntStart, dwntEnd, dwntLength, host, highLimit, incRefId ) {
+        const sql ='INSERT INTO ha VALUES (NULL,?,?,?,?,?, NULL, NULL, ?)'
         const connection = this.setupDB(this.db);
 
         return new Promise ((resolve, reject) => {
-            connection.query(sql, [ dwntStart, dwntEnd, dwntLength, host, highLimit ], (err, result) => {
+            connection.query(sql, [ dwntStart, dwntEnd, dwntLength, host, highLimit, incRefId ], (err, result) => {
+                if(err){
+                    return reject(err)
+                }
+                connection.end();
+                console.log("Inserted successfully")
+                return resolve(result)
+            })
+        })
+    }
+
+    insertReqDropsIntoHa(dwntStart, dwntEnd, dwntLength, host,) {
+        const sql ='INSERT INTO ha VALUES (NULL,?,?,?,?,NULL, NULL, NULL, NULL)'
+        const connection = this.setupDB(this.db);
+
+        return new Promise ((resolve, reject) => {
+            connection.query(sql, [ dwntStart, dwntEnd, dwntLength, host ], (err, result) => {
                 if(err){
                     return reject(err)
                 }
@@ -65,7 +84,7 @@ export class DatabaseConnection {
     }
 
     checkValuesInHa ( dateFrom, dateTo, highLimit ){
-        const sql ='SELECT * from ha WHERE downtimeStart >= ? AND downtimeEnd <= ? AND highLimit = ?';
+        const sql ='SELECT * from ha WHERE downtimeStart >= ? AND downtimeEnd <= ? AND (highLimit = ? OR highLimit IS NULL)';
         const connection = this.setupDB(this.db);
 
         return new Promise ((resolve, reject) => {
@@ -79,18 +98,35 @@ export class DatabaseConnection {
         })
     }
 
-    deleteValue(id) {
+
+    deleteValueFromIncidents(id) {
         const sql = `DELETE FROM incidents WHERE id=?`;
         const connection = this.setupDB(this.db);
 
-        connection.query(sql,[ id ], (err, rows, fields) => {
-            if (err) {
-                throw err
-            }
-            console.log(`Row with ID ${id} was deleted`)
+        return new Promise ((resolve, reject) => {
+            connection.query(sql, [ id ], (err, result) => {
+                if(err){
+                    return reject(err)
+                }
+                connection.end();
+                return resolve(result)
+            })
         })
+    }
 
-        connection.end();
+    deleteValueFromHa(id) {
+        const sql = `DELETE FROM ha WHERE id=?`;
+        const connection = this.setupDB(this.db);
+
+        return new Promise ((resolve, reject) => {
+            connection.query(sql, [ id ], (err, result) => {
+                if(err){
+                    return reject(err)
+                }
+                connection.end();
+                return resolve(result)
+            })
+        })
     }
 
     deleteFromService(){
@@ -107,21 +143,39 @@ export class DatabaseConnection {
         connection.end();
     }
 
-    selectAllValuesInIncidents(start, end) {
-        const sql = 'SELECT * FROM incidents WHERE start_date >= ? AND end_date <= ? '
+    selectAllValuesInIncidents(column, start, end) {
+        let sql = '';
         const connection = this.setupDB(this.db);
         const dateFrom = new Date(start).toJSON().slice(0, 19).replace('T', ' ');
         const dateTo = new Date(end).toJSON().slice(0, 19).replace('T', ' ');
 
-        return new Promise((resolve, reject) => {
-            connection.query(sql,[dateFrom, dateTo], (err, result) => {
-                if(err){
-                    return reject(err)
-                }
-                connection.end();
-                return resolve(result)
+        if(column === 'all'){
+            sql = 'SELECT * FROM incidents WHERE start_date >= ? AND end_date <= ?'
+            return new Promise((resolve, reject) => {
+                connection.query(sql,[dateFrom, dateTo], (err, result) => {
+                    if(err){
+                        return reject(err)
+                    }
+                    connection.end();
+                    return resolve(result)
+                })
             })
-        })
+        } else if (column === 'id'){
+            console.log(dateFrom)
+            console.log(dateTo)
+            sql = 'SELECT id FROM incidents WHERE start_date >= ? AND end_date <= ?'
+            return new Promise((resolve, reject) => {
+                connection.query(sql,[dateFrom, dateTo], (err, result) => {
+                    if(err){
+                        return reject(err)
+                    }
+                    connection.end();
+                    return resolve(result)
+                })
+            })
+        }
+
+
     }
 
     getAllValuesInHa() {

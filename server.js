@@ -3,8 +3,8 @@ import {DatabaseConnection} from "./database_connection.js";
 import {main} from "./incidents.js";
 import cors from "cors";
 import {haMain} from "./high_availability.js";
-import {checkAllInHa, checkHaMonth} from "./helpers/helpers.js";
-import {isNull} from "util";
+import {checkAllInHa, checkHaMonth, deleteIdFromHa} from "./helpers/helpers.js";
+import {reqDropMain} from "./request_drop_search.js";
 
 const server = express();
 const corsOptions = {
@@ -19,35 +19,39 @@ server.route('/tracker')
     .get(async (req, res) => {
         let result = {}
         const dbConnection = new DatabaseConnection("incidents");
-        result = await dbConnection.selectAllValuesInIncidents(req.query.start, req.query.end)
+        result = await dbConnection.selectAllValuesInIncidents('all',req.query.start, req.query.end)
         res.send(JSON.stringify(result))
     })
     .post((req, res) => {
         const dbConnection = new DatabaseConnection("incidents")
         dbConnection.insertValuesIntoIncidents(
-            '2022-02-01',
-            '2022-02-02',
-            5,
-            'test',
-            'some comments'
+            req.body.incidentStart,
+            req.body.incidentEnd,
+            req.body.incLength,
+            req.body.desc,
+            req.body.comments
         );
         res.send(JSON.stringify("Done"))
         })
-    .delete((req, res) => {
+    .delete(async(req, res) => {
         const dbConnection = new DatabaseConnection("incidents")
-        dbConnection.deleteValue(req.query.id)
-        res.send(JSON.stringify("Done"))
+        const result = await dbConnection.deleteValueFromIncidents(req.query.id)
+        res.send(JSON.stringify(result))
     })
 
 server.route('/incidents')
     .get(async (req, res) => {
         const result = await main()
+        console.log(JSON.stringify(result))
         res.send(JSON.stringify(result))
     })
 server.route('/ha')
     .post(async (req, res) => {
-        const result = await haMain(req.body.month, req.body.year, req.body.limit)
-        res.send(JSON.stringify(result))
+        await haMain(req.body.month, req.body.year, req.body.limit)
+        if(req.body.limit === undefined){
+            await reqDropMain(req.body.month, req.body.year)
+        }
+        res.send(JSON.stringify("Done"))
     })
     .get(async (req, res) => {
         let result;
@@ -57,6 +61,15 @@ server.route('/ha')
             result = await checkAllInHa()
         }
 
+        res.send(result)
+    })
+    .delete(async (req, res) => {
+        let result;
+        if(req.query.id !== undefined){
+            result = await deleteIdFromHa(req.query.id)
+        } else {
+            result = 'id is invalid!'
+        }
         res.send(result)
     })
 server.listen(`${port}`, () => {

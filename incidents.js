@@ -66,14 +66,14 @@ const checkForLongIncidents = (array) => {
                 const timeDiff = convertToTimestamp(array[i].incidentTime) - convertToTimestamp(array[i + 1].incidentTime);
                 if (timeDiff <= 2 * 60 * 1000 && timeDiff >= -2 * 60 * 1000) {
                     let maxNetto = Math.max(array[i].nettoTime, array[i + 1].nettoTime);
-                    array[i] = createIncidentObject(array[i].incidentTime, array[i + 1].incidentTime, array[i].host, maxNetto);
+                    array[i] = checkItemTimeFormat(array[i]);
                     array.splice(i + 1, 1);
                 } else {
                     array[i] = checkItemTimeFormat(array[i]);
                     i++;
                 }
             } else {
-                array[i] = createIncidentObject(array[i].incidentTime, array[i].incidentTime, array[i].host, array[i].nettoTime)
+                array[i] = checkItemTimeFormat(array[i]);
                 i++;
             }
         }
@@ -163,7 +163,7 @@ const getIncidentsFromArray = async () => {
 
 
     for (const result of resultArray) {
-        if (result.series.length === 0){
+        if (result.series === undefined || result.series.length === 0){
             return incidents
         }
         for (let i = 0; i < result.series[0].values.length; i++) {
@@ -180,7 +180,9 @@ const getIncidentsFromArray = async () => {
         }
     }
     incidents = checkForLongIncidents(incidents)
+    console.log(incidents)
     incidents = checkForGlobalIncidents(incidents)
+
     return incidents;
 }
 
@@ -188,9 +190,12 @@ const getIncidentsFromArray = async () => {
 * @returns string
  */
 
-export const main = async (dateFrom, dateTo) => {
+export const main = async () => {
     let result;
     let dateInsertResult;
+
+    dateTo = Date.now()
+    dateFrom = await lastCheckTimestamp();
 
     const incidents = await getIncidentsFromArray()
     dateInsertResult = await insertDate(dateTo);
